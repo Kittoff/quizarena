@@ -29,7 +29,16 @@ export class RankingService {
       },
     });
 
-    return users.map((user, index) => ({ rank: index + 1, ...user }));
+    let lastXp: number | null = null;
+    let lastRank = 0;
+
+    return users.map((user, index) => {
+      if (user.xp !== lastXp) {
+        lastRank = index + 1;
+        lastXp = user.xp;
+      }
+      return { rank: lastRank, ...user };
+    });
   }
 
   async getUserRank(userId: string): Promise<number | null> {

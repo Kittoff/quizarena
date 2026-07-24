@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useAuthStore } from "@/src/store/authStore";
-import type { AuthSession } from "@/src/lib/auth";
+import type { AuthSession, AuthUser } from "@/src/lib/auth";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -32,6 +32,7 @@ async function request(
 export function useAuth() {
   const session = useAuthStore((s) => s.session);
   const setSession = useAuthStore((s) => s.setSession);
+  const updateUser = useAuthStore((s) => s.updateUser);
   const clear = useAuthStore((s) => s.clear);
 
   const [error, setError] = useState<string | null>(null);
@@ -67,14 +68,31 @@ export function useAuth() {
     [submit],
   );
 
+  const accessToken = session?.accessToken ?? null;
+
+  const refreshUser = useCallback(async () => {
+    if (!accessToken) return;
+    try {
+      const res = await fetch(`${API_URL}/auth/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return;
+      const user = (await res.json()) as AuthUser;
+      updateUser(user);
+    } catch {
+      // keep last known state if the refresh fails
+    }
+  }, [accessToken, updateUser]);
+
   return {
     user: session?.user ?? null,
-    accessToken: session?.accessToken ?? null,
+    accessToken,
     isAuthenticated: session !== null,
     isLoading,
     error,
     register,
     login,
     logout: clear,
+    refreshUser,
   };
 }

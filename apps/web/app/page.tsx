@@ -59,37 +59,37 @@ export default function Home() {
             {t("training")}
           </Link>
 
-          <button
-            disabled
-            title={t("comingSoon")}
+          <Link
+            href="/ranking"
             className="
             flex items-center justify-center gap-3
             rounded-xl
             bg-slate-800
             px-8 py-4
             text-lg
-            opacity-50 cursor-not-allowed
+            hover:bg-slate-700
+            transition
             "
           >
             <Trophy />
             {t("ranking")}
-          </button>
+          </Link>
 
-          <button
-            disabled
-            title={t("comingSoon")}
+          <Link
+            href="/profile"
             className="
             flex items-center justify-center gap-3
             rounded-xl
             bg-slate-800
             px-8 py-4
             text-lg
-            opacity-50 cursor-not-allowed
+            hover:bg-slate-700
+            transition
             "
           >
             <User />
             {t("profile")}
-          </button>
+          </Link>
         </div>
       </motion.div>
     </main>

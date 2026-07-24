@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { DuelModule } from './duel/duel.module';
 import { GeoModule } from './geo/geo.module';
 import { QuestionsModule } from './questions/questions.module';
+import { RankingModule } from './ranking/ranking.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -18,6 +19,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     DuelModule,
     GeoModule,
+    RankingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

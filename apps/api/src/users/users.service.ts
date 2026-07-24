@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { prisma } from '@quiz-arena/database';
 
+const XP_PER_LEVEL = 100;
+
 @Injectable()
 export class UsersService {
   findByUsername(username: string) {
@@ -18,12 +20,19 @@ export class UsersService {
   }
 
   async recordResult(userId: string, xpGained: number, won: boolean | null) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return null;
+
+    const xp = user.xp + xpGained;
+    const level = Math.floor(xp / XP_PER_LEVEL) + 1;
+
     return prisma.user.update({
       where: { id: userId },
       data: {
-        xp: { increment: xpGained },
-        wins: won === true ? { increment: 1 } : undefined,
-        losses: won === false ? { increment: 1 } : undefined,
+        xp,
+        level,
+        wins: won === true ? user.wins + 1 : user.wins,
+        losses: won === false ? user.losses + 1 : user.losses,
       },
     });
   }

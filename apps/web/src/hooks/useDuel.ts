@@ -1,9 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { getDuelSocket } from "@/src/lib/socket";
-import { getStoredIdentity, storeIdentity } from "@/src/lib/identity";
-import type { Identity } from "@/src/lib/identity";
+import { useAuth } from "@/src/hooks/useAuth";
 import { useLanguagePreference } from "@/src/hooks/useLanguagePreference";
 import { useDuelStore } from "@/src/store/duelStore";
 import type {
@@ -11,28 +10,6 @@ import type {
   DuelQuestionPayload,
   DuelRoundResultPayload,
 } from "@/src/types/duel";
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
-
-async function identify(username: string): Promise<Identity> {
-  const res = await fetch(`${API_URL}/users/identify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username }),
-  });
-
-  if (!res.ok) {
-    const body: unknown = await res.json().catch(() => null);
-    const message =
-      body && typeof body === "object" && "message" in body
-        ? String((body as { message: unknown }).message)
-        : "Impossible de créer ce pseudo";
-    throw new Error(message);
-  }
-
-  const user = (await res.json()) as { id: string; username: string };
-  return { id: user.id, username: user.username };
-}
 
 export function useDuel() {
   const status = useDuelStore((s) => s.status);
@@ -55,9 +32,7 @@ export function useDuel() {
   const applyEnd = useDuelStore((s) => s.applyEnd);
   const reset = useDuelStore((s) => s.reset);
 
-  const [identity, setIdentity] = useState<Identity | null>(() =>
-    getStoredIdentity(),
-  );
+  const { accessToken } = useAuth();
   const { language, setLanguage } = useLanguagePreference();
   const listenersReady = useRef(false);
 
@@ -78,43 +53,32 @@ export function useDuel() {
     socket.on("connect_error", () =>
       setError("Connexion au serveur de duel impossible"),
     );
-  }, [applyEnd, applyQuestion, applyRoundResult, setError, setStatus, startQueue]);
+  }, [
+    applyEnd,
+    applyQuestion,
+    applyRoundResult,
+    setError,
+    setStatus,
+    startQueue,
+  ]);
 
-  const joinQueue = useCallback(
-    (player: Identity) => {
-      const socket = getDuelSocket();
-      if (!socket.connected) socket.connect();
-      socket.emit("duel:join", {
-        userId: player.id,
-        username: player.username,
-        language: language ?? "fr",
-      });
-    },
-    [language],
-  );
+  const findOpponent = useCallback(() => {
+    if (!accessToken) {
+      setError("Connecte-toi pour jouer en duel");
+      return;
+    }
 
-  const findOpponent = useCallback(
-    async (username: string) => {
-      setStatus("identifying");
-      try {
-        const nextIdentity = await identify(username);
-        storeIdentity(nextIdentity);
-        setIdentity(nextIdentity);
-        joinQueue(nextIdentity);
-      } catch (error) {
-        setError(error instanceof Error ? error.message : "Erreur inconnue");
-      }
-    },
-    [joinQueue, setStatus, setError],
-  );
+    setStatus("identifying");
+    const socket = getDuelSocket();
+    socket.auth = { token: accessToken };
+    if (!socket.connected) socket.connect();
+    socket.emit("duel:join", { language: language ?? "fr" });
+  }, [accessToken, language, setStatus, setError]);
 
   const requeue = useCallback(() => {
     reset();
-    if (identity) {
-      setStatus("identifying");
-      joinQueue(identity);
-    }
-  }, [identity, joinQueue, reset, setStatus]);
+    findOpponent();
+  }, [reset, findOpponent]);
 
   const answer = useCallback(
     (answerId: number) => {
@@ -139,7 +103,6 @@ export function useDuel() {
 
   return {
     status,
-    storedUsername: identity?.username ?? null,
     language,
     setLanguage,
     opponentUsername,

@@ -1,21 +1,20 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { prisma } from '@quiz-arena/database';
-
-const USERNAME_REGEX = /^[a-zA-Z0-9_-]{3,20}$/;
 
 @Injectable()
 export class UsersService {
-  async identify(username: string) {
-    if (!username || !USERNAME_REGEX.test(username)) {
-      throw new BadRequestException(
-        'Le pseudo doit contenir entre 3 et 20 caractères (lettres, chiffres, - ou _)',
-      );
-    }
+  findByUsername(username: string) {
+    return prisma.user.findUnique({ where: { username } });
+  }
 
-    const existing = await prisma.user.findUnique({ where: { username } });
-    if (existing) return existing;
+  findById(id: string) {
+    return prisma.user.findUnique({ where: { id } });
+  }
 
-    return prisma.user.create({ data: { username } });
+  create(username: string, hashedPassword: string) {
+    return prisma.user.create({
+      data: { username, password: hashedPassword },
+    });
   }
 
   async recordResult(userId: string, xpGained: number, won: boolean | null) {

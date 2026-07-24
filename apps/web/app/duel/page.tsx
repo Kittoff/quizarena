@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { Loader2, Swords } from "lucide-react";
 import { useDuel } from "@/src/hooks/useDuel";
+import { useAuth } from "@/src/hooks/useAuth";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { QuizCard } from "@/src/app/components/QuizCard";
 import { Button } from "@/src/app/components/Button";
@@ -13,7 +13,6 @@ import { ExitButton } from "@/src/app/components/ExitButton";
 export default function DuelPage() {
   const {
     status,
-    storedUsername,
     language,
     setLanguage,
     opponentUsername,
@@ -30,9 +29,8 @@ export default function DuelPage() {
     answer,
     leave,
   } = useDuel();
+  const { user, isAuthenticated, logout } = useAuth();
   const t = useTranslation(language);
-
-  const [username, setUsername] = useState(storedUsername ?? "");
 
   if (status === "idle" || status === "error") {
     return (
@@ -45,31 +43,36 @@ export default function DuelPage() {
         <h1 className="text-4xl font-bold flex items-center gap-3">
           <Swords /> {t("duelTitle")}
         </h1>
-        <p className="text-slate-300 text-center max-w-sm">
-          {t("duelIntro")}
-        </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (username.trim().length >= 3) void findOpponent(username.trim());
-          }}
-          className="flex flex-col gap-3 w-full max-w-xs"
-        >
-          <input
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder={t("usernamePlaceholder")}
-            minLength={3}
-            maxLength={20}
-            className="rounded-xl bg-slate-800 px-4 py-3 text-white outline-none focus:ring-2 focus:ring-blue-500"
-          />
-          <Button type="submit" className="w-full justify-center">
-            {t("findOpponent")}
-          </Button>
-        </form>
-        {errorMessage && (
-          <p className="text-rose-400 text-sm">{errorMessage}</p>
+
+        {isAuthenticated ? (
+          <>
+            <p className="text-slate-300 text-center max-w-sm">
+              {user?.username}
+            </p>
+            <Button onClick={findOpponent} className="w-full max-w-xs justify-center">
+              {t("findOpponent")}
+            </Button>
+            <button
+              onClick={logout}
+              className="text-slate-500 text-sm hover:text-white"
+            >
+              {t("logout")}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-slate-300 text-center max-w-sm">
+              {t("loginRequired")}
+            </p>
+            <Link href="/login">
+              <Button className="w-full max-w-xs justify-center">
+                {t("login")}
+              </Button>
+            </Link>
+          </>
         )}
+
+        {errorMessage && <p className="text-rose-400 text-sm">{errorMessage}</p>}
         <Link href="/" className="text-slate-400 text-sm hover:text-white">
           {t("backHome")}
         </Link>

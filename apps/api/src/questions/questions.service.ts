@@ -49,7 +49,9 @@ export class QuestionsService {
 
   async findAll(lang: string = DEFAULT_LANGUAGE): Promise<PublicQuestion[]> {
     const questions = await this.findAllRaw();
-    return questions.map((question) => this.project(question, lang));
+    return this.shuffle(questions).map((question) =>
+      this.project(question, lang),
+    );
   }
 
   async findRandomRaw(count: number): Promise<QuestionWithRelations[]> {

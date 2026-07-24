@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { Loader2, Trophy } from "lucide-react";
+import { Loader2, RotateCcw, Trophy } from "lucide-react";
 import { useLanguagePreference } from "@/src/hooks/useLanguagePreference";
 import { useTranslation } from "@/src/hooks/useTranslation";
 import { useAuth } from "@/src/hooks/useAuth";
+import { Button } from "@/src/app/components/Button";
 import { LanguageSwitcher } from "@/src/app/components/LanguageSwitcher";
 import type { RankingEntry } from "@/src/types/ranking";
 
@@ -18,6 +19,13 @@ export default function RankingPage() {
 
   const [entries, setEntries] = useState<RankingEntry[] | null>(null);
   const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
+  const retry = useCallback(() => {
+    setEntries(null);
+    setError(false);
+    setAttempt((n) => n + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +45,7 @@ export default function RankingPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [attempt]);
 
   return (
     <main className="relative min-h-screen flex flex-col items-center bg-slate-950 text-white px-4 py-10">
@@ -53,7 +61,15 @@ export default function RankingPage() {
 
       {!entries && !error && <Loader2 className="animate-spin" size={32} />}
 
-      {error && <p className="text-slate-300">{t("loadFailed")}</p>}
+      {error && (
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-slate-300">{t("rankingLoadFailed")}</p>
+          <Button onClick={retry}>
+            <RotateCcw size={20} />
+            {t("retry")}
+          </Button>
+        </div>
+      )}
 
       {entries && (
         <div className="w-full max-w-xl flex flex-col gap-2">

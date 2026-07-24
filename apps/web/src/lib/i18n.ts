@@ -53,6 +53,7 @@ const translations = {
     winRate: "Taux de victoire",
     yourRank: "Ton classement",
     profileLoginRequired: "Connecte-toi pour voir ton profil.",
+    rankingLoadFailed: "Impossible de charger le classement.",
   },
   en: {
     tagline: "The world's general-knowledge duel",
@@ -106,6 +107,7 @@ const translations = {
     winRate: "Win rate",
     yourRank: "Your rank",
     profileLoginRequired: "Log in to see your profile.",
+    rankingLoadFailed: "Couldn't load the leaderboard.",
   },
   ja: {
     tagline: "世界の一般常識対戦",
@@ -159,6 +161,7 @@ const translations = {
     winRate: "勝率",
     yourRank: "あなたの順位",
     profileLoginRequired: "プロフィールを見るにはログインしてください。",
+    rankingLoadFailed: "ランキングを読み込めませんでした。",
   },
 } satisfies Record<Language, Record<string, string>>;
 

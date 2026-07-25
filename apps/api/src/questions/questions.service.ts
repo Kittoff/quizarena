@@ -73,10 +73,12 @@ export class QuestionsService {
       category: question.category,
       difficulty: question.difficulty,
       text: this.pickText(question.translations, lang),
-      answers: question.answers.map((answer) => ({
-        id: answer.id,
-        text: this.pickText(answer.translations, lang),
-      })),
+      answers: this.shuffle(
+        question.answers.map((answer) => ({
+          id: answer.id,
+          text: this.pickText(answer.translations, lang),
+        })),
+      ),
     };
   }
 

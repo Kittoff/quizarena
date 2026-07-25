@@ -22,6 +22,7 @@ export function useDuel() {
   const correctAnswerId = useDuelStore((s) => s.correctAnswerId);
   const endResult = useDuelStore((s) => s.endResult);
   const errorMessage = useDuelStore((s) => s.errorMessage);
+  const opponentDisconnected = useDuelStore((s) => s.opponentDisconnected);
 
   const setStatus = useDuelStore((s) => s.setStatus);
   const setError = useDuelStore((s) => s.setError);
@@ -30,17 +31,31 @@ export function useDuel() {
   const selectAnswerAction = useDuelStore((s) => s.selectAnswer);
   const applyRoundResult = useDuelStore((s) => s.applyRoundResult);
   const applyEnd = useDuelStore((s) => s.applyEnd);
+  const setOpponentDisconnected = useDuelStore((s) => s.setOpponentDisconnected);
   const reset = useDuelStore((s) => s.reset);
 
   const { accessToken } = useAuth();
   const { language, setLanguage } = useLanguagePreference();
   const listenersReady = useRef(false);
+  const languageRef = useRef(language);
+
+  useEffect(() => {
+    languageRef.current = language;
+  }, [language]);
 
   useEffect(() => {
     if (listenersReady.current) return;
     listenersReady.current = true;
 
     const socket = getDuelSocket();
+
+    // Fires on the initial connection and on every automatic reconnect
+    // (e.g. after a brief network drop) — re-announces us to the server
+    // so it can resume our session instead of forfeiting it.
+    socket.on("connect", () => {
+      socket.emit("duel:join", { language: languageRef.current ?? "fr" });
+    });
+
     socket.on("duel:queued", () => startQueue());
     socket.on("duel:question", (payload: DuelQuestionPayload) =>
       applyQuestion(payload),
@@ -50,6 +65,12 @@ export function useDuel() {
       applyRoundResult(payload),
     );
     socket.on("duel:end", (payload: DuelEndPayload) => applyEnd(payload));
+    socket.on("duel:opponent-disconnected", () =>
+      setOpponentDisconnected(true),
+    );
+    socket.on("duel:opponent-reconnected", () =>
+      setOpponentDisconnected(false),
+    );
     socket.on("connect_error", () =>
       setError("Connexion au serveur de duel impossible"),
     );
@@ -58,6 +79,7 @@ export function useDuel() {
     applyQuestion,
     applyRoundResult,
     setError,
+    setOpponentDisconnected,
     setStatus,
     startQueue,
   ]);
@@ -71,8 +93,11 @@ export function useDuel() {
     setStatus("identifying");
     const socket = getDuelSocket();
     socket.auth = { token: accessToken };
-    if (!socket.connected) socket.connect();
-    socket.emit("duel:join", { language: language ?? "fr" });
+    if (socket.connected) {
+      socket.emit("duel:join", { language: language ?? "fr" });
+    } else {
+      socket.connect();
+    }
   }, [accessToken, language, setStatus, setError]);
 
   const requeue = useCallback(() => {
@@ -114,6 +139,7 @@ export function useDuel() {
     correctAnswerId,
     endResult,
     errorMessage,
+    opponentDisconnected,
     findOpponent,
     requeue,
     answer,

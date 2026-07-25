@@ -10,6 +10,7 @@ import { UsersService } from '../users/users.service';
 
 const QUESTIONS_PER_DUEL = 5;
 const DEFAULT_LANGUAGE = 'fr';
+const RECONNECT_GRACE_MS = 20_000;
 
 export interface QueuedPlayer {
   socketId: string;
@@ -21,7 +22,7 @@ export interface QueuedPlayer {
 interface DuelPlayer {
   userId: string;
   username: string;
-  socketId: string;
+  socketId: string | null;
   language: string;
   score: number;
 }
@@ -32,6 +33,8 @@ interface DuelSession {
   currentIndex: number;
   answeredUserIds: Set<string>;
   players: [DuelPlayer, DuelPlayer];
+  disconnectTimer?: NodeJS.Timeout;
+  disconnectedUserId?: string;
 }
 
 @Injectable()
@@ -41,6 +44,7 @@ export class DuelService {
   private queue: QueuedPlayer[] = [];
   private readonly sessions = new Map<string, DuelSession>();
   private readonly socketToSession = new Map<string, string>();
+  private readonly userToSession = new Map<string, string>();
 
   constructor(
     private readonly questionsService: QuestionsService,
@@ -51,7 +55,13 @@ export class DuelService {
     this.server = server;
   }
 
-  async join(player: QueuedPlayer): Promise<{ status: 'queued' | 'matched' }> {
+  async join(
+    player: QueuedPlayer,
+  ): Promise<{ status: 'queued' | 'matched' | 'reconnected' }> {
+    if (this.tryReconnect(player)) {
+      return { status: 'reconnected' };
+    }
+
     this.queue = this.queue.filter((p) => p.userId !== player.userId);
 
     const opponent = this.queue.shift();
@@ -73,19 +83,97 @@ export class DuelService {
 
     const sessionId = this.socketToSession.get(socketId);
     if (!sessionId) return;
+    this.socketToSession.delete(socketId);
 
     const session = this.sessions.get(sessionId);
     if (!session) return;
 
     const leaver = session.players.find((p) => p.socketId === socketId);
-    const opponent = session.players.find((p) => p.socketId !== socketId);
+    if (!leaver) return;
+    leaver.socketId = null;
+
+    if (session.disconnectTimer) {
+      // Both players are now gone: nobody left to notify or award a win to.
+      clearTimeout(session.disconnectTimer);
+      this.cleanupSession(session);
+      return;
+    }
+
+    const opponent = session.players.find((p) => p.userId !== leaver.userId);
+    session.disconnectedUserId = leaver.userId;
+
+    if (this.server && opponent?.socketId) {
+      this.server.to(opponent.socketId).emit('duel:opponent-disconnected');
+    }
+
+    session.disconnectTimer = setTimeout(() => {
+      this.forfeitDisconnectedPlayer(session);
+    }, RECONNECT_GRACE_MS);
+  }
+
+  private tryReconnect(player: QueuedPlayer): boolean {
+    const sessionId = this.userToSession.get(player.userId);
+    if (!sessionId) return false;
+
+    const session = this.sessions.get(sessionId);
+    if (!session) return false;
+
+    const me = session.players.find((p) => p.userId === player.userId);
+    const opponent = session.players.find((p) => p.userId !== player.userId);
+    if (!me || !opponent) return false;
+
+    me.socketId = player.socketId;
+    me.language = player.language || me.language;
+    this.socketToSession.set(player.socketId, session.id);
+
+    if (
+      session.disconnectTimer &&
+      session.disconnectedUserId === player.userId
+    ) {
+      clearTimeout(session.disconnectTimer);
+      session.disconnectTimer = undefined;
+      session.disconnectedUserId = undefined;
+
+      if (this.server && opponent.socketId) {
+        this.server.to(opponent.socketId).emit('duel:opponent-reconnected');
+      }
+    }
+
+    if (this.server) {
+      if (session.answeredUserIds.has(player.userId)) {
+        this.server.to(player.socketId).emit('duel:waiting-opponent');
+      } else {
+        const question = session.questions[session.currentIndex];
+        this.server.to(player.socketId).emit('duel:question', {
+          gameId: session.id,
+          questionIndex: session.currentIndex,
+          total: session.questions.length,
+          question: this.questionsService.project(question, me.language),
+          scores: { me: me.score, opponent: opponent.score },
+          opponent: { username: opponent.username },
+        });
+      }
+    }
+
+    return true;
+  }
+
+  private forfeitDisconnectedPlayer(session: DuelSession) {
+    const leaver = session.players.find(
+      (p) => p.userId === session.disconnectedUserId,
+    );
+    const opponent = session.players.find(
+      (p) => p.userId !== session.disconnectedUserId,
+    );
     if (!leaver || !opponent) return;
 
-    this.server?.to(opponent.socketId).emit('duel:end', {
-      result: 'win',
-      reason: 'opponent-left',
-      scores: { me: opponent.score, opponent: leaver.score },
-    });
+    if (this.server && opponent.socketId) {
+      this.server.to(opponent.socketId).emit('duel:end', {
+        result: 'win',
+        reason: 'opponent-left',
+        scores: { me: opponent.score, opponent: leaver.score },
+      });
+    }
 
     this.persistResult(session.id, opponent, leaver, opponent.userId).catch(
       (error: unknown) =>
@@ -121,6 +209,7 @@ export class DuelService {
     }
 
     for (const p of session.players) {
+      if (!p.socketId) continue;
       const opponent = session.players.find((o) => o.userId !== p.userId)!;
       this.server.to(p.socketId).emit('duel:round-result', {
         correctAnswerId: result.correctAnswerId,
@@ -183,6 +272,8 @@ export class DuelService {
     this.sessions.set(session.id, session);
     this.socketToSession.set(a.socketId, session.id);
     this.socketToSession.set(b.socketId, session.id);
+    this.userToSession.set(a.userId, session.id);
+    this.userToSession.set(b.userId, session.id);
 
     this.emitQuestion(session, 0);
   }
@@ -192,6 +283,7 @@ export class DuelService {
     const rawQuestion = session.questions[index];
 
     for (const player of session.players) {
+      if (!player.socketId) continue;
       const opponent = session.players.find((p) => p.userId !== player.userId)!;
       this.server.to(player.socketId).emit('duel:question', {
         gameId: session.id,
@@ -222,6 +314,7 @@ export class DuelService {
 
     if (this.server) {
       for (const p of session.players) {
+        if (!p.socketId) continue;
         const opponent = session.players.find((o) => o.userId !== p.userId)!;
         this.server.to(p.socketId).emit('duel:end', {
           result:
@@ -250,9 +343,11 @@ export class DuelService {
   }
 
   private cleanupSession(session: DuelSession) {
+    if (session.disconnectTimer) clearTimeout(session.disconnectTimer);
     this.sessions.delete(session.id);
     for (const player of session.players) {
-      this.socketToSession.delete(player.socketId);
+      if (player.socketId) this.socketToSession.delete(player.socketId);
+      this.userToSession.delete(player.userId);
     }
   }
 }

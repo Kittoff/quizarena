@@ -19,6 +19,7 @@ interface DuelState {
   correctAnswerId: number | null;
   endResult: DuelEndPayload | null;
   errorMessage: string | null;
+  opponentDisconnected: boolean;
 
   setStatus: (status: DuelStatus) => void;
   setError: (message: string) => void;
@@ -27,6 +28,7 @@ interface DuelState {
   selectAnswer: (answerId: number) => void;
   applyRoundResult: (payload: DuelRoundResultPayload) => void;
   applyEnd: (payload: DuelEndPayload) => void;
+  setOpponentDisconnected: (value: boolean) => void;
   reset: () => void;
 }
 
@@ -42,6 +44,7 @@ const initialState = {
   correctAnswerId: null as number | null,
   endResult: null as DuelEndPayload | null,
   errorMessage: null as string | null,
+  opponentDisconnected: false,
 };
 
 export const useDuelStore = create<DuelState>((set) => ({
@@ -60,6 +63,7 @@ export const useDuelStore = create<DuelState>((set) => ({
       opponentUsername: payload.opponent.username,
       selectedAnswerId: null,
       correctAnswerId: null,
+      opponentDisconnected: false,
     }),
   selectAnswer: (answerId) =>
     set({ status: "waiting-opponent", selectedAnswerId: answerId }),
@@ -68,8 +72,10 @@ export const useDuelStore = create<DuelState>((set) => ({
       status: "round-result",
       correctAnswerId: payload.correctAnswerId,
       scores: payload.scores,
+      opponentDisconnected: false,
     }),
   applyEnd: (payload) =>
     set({ status: "finished", endResult: payload, scores: payload.scores }),
+  setOpponentDisconnected: (value) => set({ opponentDisconnected: value }),
   reset: () => set({ ...initialState }),
 }));

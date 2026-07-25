@@ -24,6 +24,7 @@ export default function DuelPage() {
     correctAnswerId,
     endResult,
     errorMessage,
+    opponentDisconnected,
     findOpponent,
     requeue,
     answer,
@@ -168,6 +169,13 @@ export default function DuelPage() {
         </div>
       </div>
 
+      {opponentDisconnected && (
+        <div className="w-full max-w-xl mx-auto mb-4 flex items-center justify-center gap-2 rounded-xl bg-amber-500/10 px-4 py-2 text-sm text-amber-300">
+          <Loader2 className="animate-spin" size={16} />
+          {t("opponentReconnecting")}
+        </div>
+      )}
+
       <QuizCard
         question={question}
         selectedAnswerId={selectedAnswerId}
@@ -176,7 +184,7 @@ export default function DuelPage() {
         onSelect={(answerId) => answer(answerId)}
       />
 
-      {status === "waiting-opponent" && (
+      {status === "waiting-opponent" && !opponentDisconnected && (
         <p className="mt-6 text-slate-400 text-sm">
           {t("waitingForOpponent", { opponent: opponentUsername ?? "" })}
         </p>
